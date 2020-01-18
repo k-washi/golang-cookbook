@@ -1,0 +1,4 @@
+[90m[2020-01-18 23:14:53][0m [34mDEBUG[0m hello [34mkey[0m=value
+[90m[2020-01-18 23:14:53][0m [34mDEBUG[0m[36m test test2:[0m 
+[90m[2020-01-18 23:14:53][0m [34mDEBUG[0m hello [34mkey[0m=value
+[90m[2020-01-18 23:14:53][0m [34mDEBUG[0m[36m test test2:[0m 

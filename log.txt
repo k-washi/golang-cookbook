@@ -1,5 +1,5 @@
-[90m[2020-01-20 00:22:12][0m [32m INFO[0m log info
-[90m[2020-01-20 00:22:12][0m [34mDEBUG[0m log debug
-[90m[2020-01-20 00:22:12][0m [31mERROR[0m log error
+[INFO]:2020-01-20 02:13:18 [main.go:9]  - test
+ai/Documents/workspaces/golang/src/github.com/k-washi/golang-cookbook/qiita/log1/main.go - test
+[31mERROR[0m log error
 0m [34mDEBUG[0m hello [34mkey[0m=value
 [90m[2020-01-18 23:14:53][0m [34mDEBUG[0m[36m test test2:[0m 

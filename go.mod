@@ -9,6 +9,7 @@ require (
 	github.com/creack/pty v1.1.9 // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.0 // indirect
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect

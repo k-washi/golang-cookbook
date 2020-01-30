@@ -23,9 +23,11 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/gunit v1.1.2 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
+	github.com/stretchr/testify v1.4.0
 	github.com/t-tomalak/logrus-easy-formatter v0.0.0-20190827215021-c074f06c5816
 	github.com/tj/assert v0.0.0-20190920132354-ee03d75cd160 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
+	go.uber.org/zap v1.13.0
 	golang.org/x/crypto v0.0.0-20200117160349-530e935923ad // indirect
 	golang.org/x/mod v0.2.0 // indirect
 	golang.org/x/net v0.0.0-20200114155413-6afb5195e5aa // indirect

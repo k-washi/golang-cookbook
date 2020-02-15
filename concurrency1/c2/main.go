@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 )
 
 const (
@@ -45,6 +49,7 @@ func newRoom() *Room {
 		Stop:    make(chan bool),
 		clients: make(map[*Client]bool),
 	}
+	go r.run()
 	return r
 }
 
@@ -56,25 +61,57 @@ func (r *Room) run() {
 			log.Printf("Room: %v is joined", c)
 			if err := r.sendLog(c); err != nil {
 				log.Println(err)
+				c.Stop()
+			} else {
+				r.clients[c] = true
 			}
 
 		case c := <-r.Closed:
 			log.Printf("Room: %v has been closed", c)
+			delete(r.clients, c)
 
 		case msg := <-r.Recv:
 			log.Printf("Room: Received %#v", msg) //%#vはgoの構文のまま表示
+			r.appendLog(msg)
+			for c := range r.clients {
+				if err := c.Send(msg); err != nil {
+					log.Println(err)
+					c.Stop()
+					delete(r.clients, c)
+				}
+			}
 		case <-r.Purge:
 			log.Printf("Purge all clients")
+			r.purge()
 		case <-r.Stop:
 			log.Println("Closeing room...")
+			r.purge()
+			return
 
 		}
 	}
 }
 
+func (r *Room) appendLog(msg string) {
+	r.log = append(r.log, msg)
+	if len(r.log) > ChatLogLength {
+		r.log = r.log[len(r.log)-ChatLogLength:]
+	}
+}
+
 func (r *Room) sendLog(c *Client) error {
 	for _, msg := range r.log {
-		//client send msg
+		if err := c.Send(msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Room) purge() {
+	for c := range r.clients {
+		c.Stop()
+		delete(r.clients, c)
 	}
 }
 
@@ -96,9 +133,136 @@ func (c *Client) String() string {
 var lastClientId = 0
 var clientWait sync.WaitGroup
 
-func newClient(r *Room, conn *net.TCPConn)
+func newClient(r *Room, conn *net.TCPConn) *Client {
+	lastClientId++
+	cl := &Client{
+		m:       sync.Mutex{},
+		id:      lastClientId,
+		recv:    r.Recv,
+		closed:  r.Closed,
+		conn:    conn,
+		stop:    false,
+		sendBuf: &bytes.Buffer{},
+	}
+
+	cl.cond.L = &cl.m
+	clientWait.Add(1)
+	go cl.sender()
+	go cl.receiver()
+	log.Printf("%v is created", cl)
+	return cl
+
+}
+
+func (c *Client) Send(msg string) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	if c.sendBuf.Len()+len(msg) > SendBufferSize {
+		return errors.New("Buffer full")
+	}
+	c.sendBuf.WriteString(msg)
+	c.cond.Signal()
+	return nil
+}
+
+func (c *Client) Stop() {
+	c.m.Lock()
+	c.stop = true
+	c.m.Unlock()
+	c.cond.Signal()
+}
+
+func (c *Client) sender() {
+	defer func() {
+		if err := c.conn.Close(); err != nil {
+			log.Println(err)
+		}
+		log.Printf("%v is closed", c)
+		clientWait.Done()
+		c.closed <- c
+	}()
+
+	buf := &bytes.Buffer{}
+
+	c.m.Lock()
+	for {
+		if c.stop {
+			return
+		}
+		if c.sendBuf.Len() == 0 {
+			c.cond.Wait()
+			continue
+		}
+
+		buf, c.sendBuf = c.sendBuf, buf
+		c.m.Unlock()
+
+		_, err := c.conn.Write(buf.Bytes())
+		if err != nil {
+			log.Println(c, err)
+			return
+		}
+		buf.Reset()
+		c.m.Lock()
+	}
+}
+
+func (c *Client) receiver() {
+	defer c.Stop()
+
+	reader := bufio.NewReaderSize(c.conn, ChatOneLineSize)
+	for {
+		msg, err := reader.ReadString(byte('\n'))
+		if msg != "" {
+			c.recv <- msg
+		}
+		if err != nil {
+			log.Println("receiver: ", err)
+			return
+		}
+	}
+}
 
 func main() {
 	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
 	log.Println("PID: ", os.Getegid())
+
+	room := newRoom()
+
+	addr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:5056")
+	if err != nil {
+		log.Fatal(err)
+	}
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		for {
+			//Acceptで他のリクエストを受付
+			conn, err := l.AcceptTCP()
+			if err != nil {
+				log.Println(err)
+				l.Close()
+				return
+			}
+			room.Join <- newClient(room, conn)
+		}
+	}()
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGUSR1, syscall.SIGTERM, os.Interrupt)
+	for sig := range sigc {
+		switch sig {
+		case syscall.SIGUSR1:
+			room.Purge <- true
+		case syscall.SIGTERM, os.Interrupt:
+			l.Close()
+			room.Stop <- true
+			clientWait.Wait()
+			return
+		}
+	}
 }
